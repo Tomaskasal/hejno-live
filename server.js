@@ -11,7 +11,7 @@ app.use(express.static(__dirname + '/public'));
 const server = http.createServer(app);
 const wss = new WebSocketServer({ server });
 
-const TO_PROJ = new Set(['join', 'dir', 'ping', 'leave']);
+const TO_PROJ = new Set(['join', 'dir', 'ping', 'leave', 'shout']);
 
 wss.on('connection', (ws) => {
   ws.role = 'phone';

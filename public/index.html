@@ -57,6 +57,19 @@
   #rejoinBtn { cursor: pointer; font-weight: 700; font-size: 12px; letter-spacing: 2px; text-transform: uppercase; color: #fff; background: #16161b; border: none; border-radius: 10px; padding: 13px 22px; font-family: 'Montserrat', sans-serif; }
   #connDot { position: fixed; top: 10px; right: 12px; width: 8px; height: 8px; border-radius: 50%; background: #d0554f; opacity: 0.7; }
   #connDot.on { background: #3aa08c; }
+  #shoutBtn { display: block; width: 100%; max-width: 300px; margin: 18px auto 0; cursor: pointer; font-family: 'Montserrat', sans-serif; font-weight: 800; font-size: 13px; letter-spacing: 3px; text-transform: uppercase; color: #fff; background: #16161b; border: none; border-radius: 12px; padding: 17px 18px; -webkit-tap-highlight-color: transparent; transition: transform 0.12s ease, background 0.25s ease; }
+  #shoutBtn:active { transform: scale(0.96); }
+  #shoutBtn.cooling { background: rgba(26,26,31,0.22); color: rgba(255,255,255,0.9); pointer-events: none; letter-spacing: 2px; }
+  /* nizke displeje (iPhone SE, starsi Androidy): at se vejde i tlacitko a spodni odkaz */
+  @media (max-height: 700px) {
+    .page { padding: 32px 30px 24px; }
+    .bigpct { margin-top: 12px; }
+    .bigpct b { font-size: 38px; }
+    #pad { width: min(66vw, 250px); height: min(66vw, 250px); margin-top: 20px; }
+    .hint { margin-top: 10px; }
+    #shoutBtn { margin-top: 12px; padding: 15px 18px; }
+    .poetry { padding-top: 10px; font-size: 11px; }
+  }
   @keyframes breathe { 0%, 100% { opacity: 0.45; } 50% { opacity: 0.9; } }
   @keyframes fadeUp { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
   .page, .logo, .qr { animation: fadeUp 0.8s ease both; }
@@ -92,6 +105,7 @@
     <div id="lostBox" class="hidden"><p>Tvůj ptáček odletěl spát.</p><button id="rejoinBtn">Znovu připojit</button></div>
     <canvas id="pad" width="440" height="440"></canvas>
     <p class="hint">Tahem prstu veď svoji pětici</p>
+    <button id="shoutBtn">Ukaž mě na plátně</button>
     <p class="poetry">Nespěchej. Hejno naslouchá.</p>
     <div class="change" id="changeBtn">změnit ptáčka</div>
   </div>

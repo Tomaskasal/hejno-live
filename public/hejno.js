@@ -10,6 +10,7 @@
   const SP_SIZE = [1.28, 1, 0.78, 0.95];
   const AMBIENT = 180;        // ptáci "pozadí", ať plátno nikdy není prázdné
   const IDLE_MS = 20000;      // po jaké neaktivitě hráč zmizí
+  const SHOUT_MS = 4200;      // jak dlouho svítí zvýraznění po zmáčknutí "Ukaž mě"
   const uid = sessionStorage.getItem('hejno-uid') || ('p' + Math.random().toString(36).slice(2, 9));
   sessionStorage.setItem('hejno-uid', uid);
 
@@ -81,6 +82,13 @@
         const p = players.get(m.id); if (p) { p.dir = { x: m.x, y: m.y }; p.last = performance.now(); }
       } else if (m.t === 'ping') {
         const p = players.get(m.id); if (p) p.last = performance.now();
+      } else if (m.t === 'shout') {
+        const p = players.get(m.id);
+        if (p) {
+          p.last = performance.now();
+          // dokud jedno zvýraznění běží, další zmáčknutí ho neresetuje
+          if (!p.shout || performance.now() - p.shout > SHOUT_MS) p.shout = performance.now();
+        }
       } else if (m.t === 'leave') {
         removePlayer(m.id);
       }
@@ -186,7 +194,26 @@
       requestAnimationFrame(step);
     }
 
+    function pill(c, x, y, w, h, r) {
+      c.beginPath();
+      c.moveTo(x + r, y);
+      c.arcTo(x + w, y, x + w, y + h, r);
+      c.arcTo(x + w, y + h, x, y + h, r);
+      c.arcTo(x, y + h, x, y, r);
+      c.arcTo(x, y, x + w, y, r);
+      c.closePath(); c.fill();
+    }
+
+    // 1 = zvýraznění právě naskočilo, 0 = dohaslo
+    function shoutK(id, nowMs) {
+      const p = players.get(id);
+      if (!p || !p.shout) return 0;
+      const a = nowMs - p.shout;
+      return a > SHOUT_MS ? 0 : 1 - a / SHOUT_MS;
+    }
+
     function draw(t) {
+      const nowMs = performance.now();
       ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
       const g = ctx.createLinearGradient(0, 0, W, H);
       g.addColorStop(0, '#fdf1fa'); g.addColorStop(0.5, '#f0ecfd'); g.addColorStop(1, '#e9f1fe');
@@ -202,16 +229,17 @@
         ctx.fillStyle = rg; ctx.fillRect(0, 0, W, H);
       }
       for (const b of birds) {
-        const s = b.z * (b.owner ? 6.5 : 5.5) * SP_SIZE[b.sp];
+        const k = b.owner ? shoutK(b.owner, nowMs) : 0;
+        const s = b.z * (b.owner ? 6.5 : 5.5) * SP_SIZE[b.sp] * (1 + 0.55 * k);
         const ang = Math.atan2(b.vy, b.vx);
         const w = Math.sin(b.flap);
         ctx.save();
         ctx.translate(b.x, b.y); ctx.rotate(ang + Math.PI / 2);
-        ctx.globalAlpha = (b.owner ? 0.55 : 0.4) + b.z * 0.4;
+        ctx.globalAlpha = Math.min(1, (b.owner ? 0.55 : 0.4) + b.z * 0.4 + 0.35 * k);
         ctx.fillStyle = '#26262e';
         drawShape(ctx, b.sp, s, w);
         ctx.restore();
-        if (b.lead && b.owner) {
+        if (b.lead && b.owner && k <= 0) {
           const p = players.get(b.owner);
           if (p && p.name) {
             const ly = b.y - s * 2.6 - 6;
@@ -226,6 +254,46 @@
             ctx.restore();
           }
         }
+      }
+
+      // ---- „Ukaž mě": vlnky + velká jmenovka nad vedoucím ptákem ----
+      for (const b of birds) {
+        if (!b.lead || !b.owner) continue;
+        const k = shoutK(b.owner, nowMs);
+        if (k <= 0) continue;
+        const p = players.get(b.owner);
+        const age = nowMs - p.shout;
+        const fade = Math.min(1, k * 3);   // poslední třetinu doby plynule zhasne
+        // na velkém plátně musí být jmenovka i kruhy poměrově stejně velké
+        const sc = Math.max(1, Math.min(2.2, W / 960));
+        ctx.save();
+
+        // rozbíhavé kruhy
+        for (let wv = 0; wv < 3; wv++) {
+          const a = age - wv * 430;
+          if (a < 0 || a > 1500) continue;
+          const kk = a / 1500;
+          ctx.globalAlpha = (1 - kk) * 0.6 * fade;
+          ctx.strokeStyle = '#16161b';
+          ctx.lineWidth = (3 * (1 - kk) + 0.6) * sc;
+          ctx.beginPath(); ctx.arc(b.x, b.y, (24 + kk * 90) * sc, 0, 6.2832); ctx.stroke();
+        }
+
+        // jmenovka
+        const label = (p.name || SPECIES[p.sp] && SPECIES[p.sp].name || 'Hráč').toUpperCase();
+        const py = b.y - 64 * sc + Math.sin(age / 1000 * 6) * 4 * sc;
+        ctx.font = '800 ' + Math.round(24 * sc) + 'px Montserrat, sans-serif';
+        const tw = ctx.measureText(label).width;
+        ctx.globalAlpha = fade;
+        ctx.fillStyle = '#16161b';
+        pill(ctx, b.x - tw / 2 - 16 * sc, py - 20 * sc, tw + 32 * sc, 40 * sc, 20 * sc);
+        ctx.beginPath();
+        ctx.moveTo(b.x - 8 * sc, py + 19 * sc); ctx.lineTo(b.x + 8 * sc, py + 19 * sc); ctx.lineTo(b.x, py + 30 * sc);
+        ctx.closePath(); ctx.fill();
+        ctx.fillStyle = '#fff';
+        ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+        ctx.fillText(label, b.x, py);
+        ctx.restore();
       }
     }
     requestAnimationFrame(step);
@@ -275,6 +343,27 @@
       sendJoin();
       document.getElementById('lostBox').classList.add('hidden');
     };
+    const shoutBtn = document.getElementById('shoutBtn');
+    const SHOUT_LABEL = shoutBtn.textContent;
+    const SHOUT_COOLDOWN = 6;
+    shoutBtn.onclick = () => {
+      if (!flying) return;
+      send({ t: 'shout', id: uid });
+      shoutBtn.classList.add('cooling');
+      let left = SHOUT_COOLDOWN;
+      shoutBtn.textContent = 'Koukni na plátno!';
+      const iv = setInterval(() => {
+        left--;
+        if (left <= 0) {
+          clearInterval(iv);
+          shoutBtn.classList.remove('cooling');
+          shoutBtn.textContent = SHOUT_LABEL;
+        } else if (left <= 3) {
+          shoutBtn.textContent = 'Znovu za ' + left + ' s';
+        }
+      }, 1000);
+    };
+
     setInterval(() => { if (flying) send({ t: 'ping', id: uid }); }, 3000);
 
     // ---------- pad ----------
