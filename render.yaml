@@ -1,0 +1,10 @@
+services:
+  - type: web
+    name: hejno-live
+    runtime: node
+    plan: free
+    region: frankfurt
+    buildCommand: npm install
+    startCommand: node server.js
+    healthCheckPath: /
+    autoDeploy: true
