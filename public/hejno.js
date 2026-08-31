@@ -303,16 +303,39 @@
   //  TELEFON — ovladač
   // ==================================================================
   let flying = false, chosenSp = 0;
-  function sendJoin() {
+  // Projekce hlasi stav ~5x za 3 s. Jedna zprava, ve ktere chybime, jeste
+  // neznamena odpojeni (typicky kdyz bezi projekce ve vice oknech), proto se
+  // tlacitko nabizi az po delsim tichu a mezitim se zkousime vratit sami.
+  const RETRY_AFTER_MS = 4000;    // po jake dobe ticha zkusit tiche prihlaseni
+  const RETRY_EVERY_MS = 4000;    // jak casto ten pokus opakovat
+  const LOST_GRACE_MS  = 12000;   // az po teto dobe ukazat rucni tlacitko
+  let lastSeenMs = 0, lastRetryMs = 0;
+
+  function sendJoin(quiet) {
+    if (!quiet) { lastSeenMs = performance.now(); lastRetryMs = 0; }
     send({ t: 'join', id: uid, name: document.getElementById('nameInput').value.trim(), sp: chosenSp });
   }
   function onMsg(m) {
     if (MODE === 'proj') { window.onMsgProj && window.onMsgProj(m); return; }
-    if (m.t === 'state') {
-      document.getElementById('syncValPhone').textContent = m.sync;
-      const lost = flying && m.ids && !m.ids.includes(uid);
-      document.getElementById('lostBox').classList.toggle('hidden', !lost);
+    if (m.t !== 'state') return;
+    document.getElementById('syncValPhone').textContent = m.sync;
+    const box = document.getElementById('lostBox');
+    if (!flying) { box.classList.add('hidden'); return; }
+
+    const now = performance.now();
+    if (m.ids && m.ids.includes(uid)) {   // projekce nas vidi -> vse v poradku
+      lastSeenMs = now;
+      box.classList.add('hidden');
+      return;
     }
+    if (!lastSeenMs) { lastSeenMs = now; return; }   // prvni stav po prihlaseni
+
+    const ticho = now - lastSeenMs;
+    if (ticho > RETRY_AFTER_MS && now - lastRetryMs > RETRY_EVERY_MS) {
+      lastRetryMs = now;
+      sendJoin(true);                                // tichy pokus o navrat
+    }
+    box.classList.toggle('hidden', ticho <= LOST_GRACE_MS);
   }
 
   if (MODE === 'phone') {
@@ -363,6 +386,11 @@
         }
       }, 1000);
     };
+
+    // po odemceni displeje nebo navratu z jine aplikace se rovnou prihlasime zpet
+    document.addEventListener('visibilitychange', () => {
+      if (!document.hidden && flying) sendJoin(true);
+    });
 
     setInterval(() => { if (flying) send({ t: 'ping', id: uid }); }, 3000);
 
